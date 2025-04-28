@@ -3,6 +3,7 @@ library(rstan)
 library(sf)
 library(terra)
 library(tigris)
+library(brms)
 
 
 data <- read_xlsx("data.xlsx")
@@ -13,9 +14,10 @@ data$longitude <- data$`Block Lon`/10^6
 data$quality_of_life <- data$`Q3[06]  [6  Overall quality of life in D`
 data$quality_of_life <- as.factor(data$quality_of_life)
 data$own_rent <- as.factor(data$`Q30  Do you own or rent your current res`)
-data$length <- cut(data$`Q27  Approximately how many years have y`, breaks = c(-Inf, 5, 10, 15, 20, 30, Inf),
+data$length_cat <- cut(data$`Q27  Approximately how many years have y`, breaks = c(-Inf, 5, 10, 15, 20, 30, Inf),
                    labels = c("0-5", "6-10", "11-15", "16-20", "21-30", "31+"),
                    right = TRUE)
+data$length <- data$`Q27  Approximately how many years have y`
 
 data_sf <- st_as_sf(data, coords = c("longitude", "latitude"), crs = 4326) 
 
@@ -45,3 +47,21 @@ ggplot() +
   theme_minimal()
 
 data$`Q32[02]  [Black or African American]`
+
+
+## Check missing values vs. Zip code
+table(data$own_rent, data$zip_recode) # can remove missing values 
+table(data$quality_of_life, data$zip_recode) # can remove missing values
+data_clean <- data %>%
+  filter(quality_of_life != 9 & own_rent != 9)
+data_clean$quality_of_life <- as.numeric(data_clean$quality_of_life)
+
+### Bayesian model
+fit1 <- brm(quality_of_life ~ (1 + length + own_rent + length*own_rent | zip_recode), 
+            family = cumulative(link = "logit", threshold = "flexible"), data = data_clean)
+
+
+exp(-3.64)/(1 + exp(-3.64))
+exp(-1.71)/(1 + exp(-1.71))
+exp(-0.53)/(1 + exp(-0.53))
+exp(1.68)/(1 + exp(1.68))
