@@ -18,6 +18,7 @@ data$length_cat <- cut(data$`Q27  Approximately how many years have y`, breaks =
                    labels = c("0-5", "6-10", "11-15", "16-20", "21-30", "31+"),
                    right = TRUE)
 data$length <- data$`Q27  Approximately how many years have y`
+data$income <- as.factor(data$`Q33  Would you say your total annual hou`)
 
 data_sf <- st_as_sf(data, coords = c("longitude", "latitude"), crs = 4326) 
 
@@ -25,10 +26,24 @@ durham_blocks <- blocks(state = "NC", county = "Durham", year = 2020, class = "s
 
 ggplot() +
   geom_sf(data = durham_blocks, fill = "white", color = "black") + 
-  geom_sf(data = data_sf, aes(color = length), size = 2) +
+  geom_sf(data = data_sf, aes(color = length_cat), size = 2) +
   scale_color_brewer(palette = "Set1") +
+  labs(x = "Latitude", y = "Longitude", color = "Zip Code") + 
   theme_minimal()
 
+ggplot() +
+  geom_sf(data = durham_blocks, fill = "white", color = "black") + 
+  geom_sf(data = data_sf, aes(color = own_rent), size = 2) +
+  scale_color_brewer(palette = "Set1") +
+  labs(x = "Latitude", y = "Longitude", color = "Rent vs. Own") + 
+  theme_minimal()
+
+ggplot() +
+  geom_sf(data = durham_blocks, fill = "white", color = "black") + 
+  geom_sf(data = data_sf, aes(color = income), size = 2) +
+  scale_color_brewer(palette = "Set1") +
+  labs(x = "Latitude", y = "Longitude", color = "Income Level") + 
+  theme_minimal()
 
 ### Produce supplementary figure 1 -- Zip recode
 
@@ -47,17 +62,27 @@ ggplot() +
   theme_minimal()
 
 data$`Q32[02]  [Black or African American]`
+data$race <- as.factor(if_else(is.na(data$`Q32[02]  [Black or African American]`), 0, 1))
 
 
 ## Check missing values vs. Zip code
 table(data$own_rent, data$zip_recode) # can remove missing values 
 table(data$quality_of_life, data$zip_recode) # can remove missing values
 data_clean <- data %>%
-  filter(quality_of_life != 9 & own_rent != 9)
+  filter(quality_of_life != 9 & own_rent != 9 & income != 9)
 data_clean$quality_of_life <- as.numeric(data_clean$quality_of_life)
 
 ### Bayesian model
-fit1 <- brm(quality_of_life ~ (1 + length + own_rent + length*own_rent | zip_recode), 
+fit1 <- brm(quality_of_life ~ 1 + length, 
+            family = cumulative(link = "logit", threshold = "flexible"), data = data_clean)
+
+fit2 <- brm(quality_of_life ~ length + (1 | zip_recode), 
+            family = cumulative(link = "logit", threshold = "flexible"), data = data_clean)
+
+fit3 <- brm(quality_of_life ~ length + own_rent + length*own_rent + race + income + (1 | zip_recode), 
+            family = cumulative(link = "logit", threshold = "flexible"), data = data_clean)
+
+fit4 <- brm(quality_of_life ~ income + race + (1 + length + own_rent + length*own_rent | zip_recode), 
             family = cumulative(link = "logit", threshold = "flexible"), data = data_clean)
 
 
